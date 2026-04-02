@@ -1,11 +1,23 @@
 # dotfiles
-Includes dotfiles for my macOS environment.
+Dotfiles and Codex skills for my local macOS setup.
 
-## layout
+## repository layout
 
-Shared app configs live under `config/`, for example `config/sketchybar` and `config/aerospace`.
+### config/
 
-Custom Codex skills can live under `skills/` and be symlinked into your local Codex skills directory when you want to use them.
+Shared app configs live under `config/`. These are the files I symlink into my local machine.
+
+Current config directories:
+- `config/aerospace` for AeroSpace
+- `config/linearmouse` for LinearMouse
+- `config/sketchybar` for SketchyBar
+
+### skills/
+
+Custom Codex skills live under `skills/`. Each skill can have its own `SKILL.md`, prompts, assets, and other support files, then be symlinked into the local Codex skills directory when needed.
+
+Current skills:
+- `skills/single-paper-review`
 
 ## aerospace
 [project link](https://github.com/nikitabobko/AeroSpace)
@@ -18,10 +30,3 @@ I have aerospace set to a maximum of 10 spaces: 1 ~ 10 (0) to be accessed easily
 [project link](https://github.com/FelixKratz/SketchyBar)
 
 Custom menu bar to be used in place of (or in conjunction with) the default macOS menu bar. Integrates well with aerospace (at least, in principle).
-
-
-## ghostty
-[project link](https://github.com/ghostty-org/ghostty)
-
-I use ghostty as my main terminal; i don't know why.
-

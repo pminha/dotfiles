@@ -61,15 +61,15 @@ For each key metric used in Methods/Results, include:
 
 ### Metric: [Name]
 - **Definition**:
-  $$[Put the formula here]$$
+	$$[Put the formula here]$$
 - **How this paper computes it**:
-  - [Averaging: per-sample / per-class / micro vs macro]
-  - [Threshold, matching rule, postprocessing]
-  - [Confidence interval / seed / repeat]
+	- [Averaging: per-sample / per-class / micro vs macro]
+	- [Threshold, matching rule, postprocessing]
+	- [Confidence interval / seed / repeat]
 - **Interpretation**:
-  - [What a high or low value means]
-  - [What it is sensitive to]
-  - [When it can be misleading]
+	- [What a high or low value means]
+	- [What it is sensitive to]
+	- [When it can be misleading]
 
 ## Experiments
 ### Experimental Setup
