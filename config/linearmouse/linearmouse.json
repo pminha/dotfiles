@@ -1,0 +1,134 @@
+{
+  "$schema" : "https:\/\/schema.linearmouse.app\/0.10.2",
+  "schemes" : [
+    {
+      "buttons" : {
+        "mappings" : [
+          {
+            "action" : "missionControl",
+            "button" : 5,
+            "command" : false,
+            "control" : false,
+            "option" : false,
+            "shift" : false
+          }
+        ]
+      },
+      "if" : {
+        "device" : {
+          "category" : "mouse",
+          "productID" : "0xb034",
+          "productName" : "MX Master 3S M",
+          "vendorID" : "0x46d"
+        }
+      },
+      "pointer" : {
+        "acceleration" : 1,
+        "disableAcceleration" : false,
+        "speed" : 0.08
+      },
+      "scrolling" : {
+        "acceleration" : {
+          "vertical" : 1
+        },
+        "distance" : {
+          "vertical" : "auto"
+        },
+        "reverse" : {
+          "horizontal" : false,
+          "vertical" : true
+        },
+        "speed" : {
+          "vertical" : 0
+        }
+      }
+    },
+    {
+      "if" : {
+        "device" : {
+          "category" : "mouse",
+          "productID" : "0x1969",
+          "productName" : "Moonlander Mark I",
+          "vendorID" : "0x3297"
+        }
+      },
+      "pointer" : {
+        "acceleration" : 1,
+        "disableAcceleration" : true
+      },
+      "scrolling" : {
+        "acceleration" : {
+          "vertical" : 1
+        },
+        "distance" : {
+          "vertical" : "auto"
+        },
+        "reverse" : {
+          "horizontal" : false
+        },
+        "speed" : {
+          "vertical" : 0
+        }
+      }
+    },
+    {
+      "if" : {
+        "device" : {
+          "category" : "trackpad",
+          "productID" : "0x324",
+          "productName" : "Magic Trackpad",
+          "vendorID" : "0x4c"
+        }
+      },
+      "pointer" : {
+        "acceleration" : "unset",
+        "disableAcceleration" : false,
+        "redirectsToScroll" : false,
+        "speed" : "unset"
+      }
+    },
+    {
+      "if" : {
+        "device" : {
+          "category" : "mouse",
+          "productID" : "0x615e",
+          "productName" : "Corne",
+          "vendorID" : "0x1d50"
+        }
+      },
+      "pointer" : {
+        "acceleration" : 1,
+        "speed" : 0.25
+      },
+      "scrolling" : {
+        "acceleration" : {
+          "vertical" : 0.3
+        },
+        "reverse" : {
+          "vertical" : true
+        },
+        "speed" : {
+          "vertical" : 50
+        }
+      }
+    },
+    {
+      "if" : {
+        "device" : {
+          "category" : "mouse",
+          "productID" : "0xc54d",
+          "productName" : "USB Receiver",
+          "vendorID" : "0x46d"
+        }
+      },
+      "pointer" : {
+        "speed" : 0.1929
+      },
+      "scrolling" : {
+        "reverse" : {
+          "vertical" : true
+        }
+      }
+    }
+  ]
+}

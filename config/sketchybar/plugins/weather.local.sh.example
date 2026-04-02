@@ -1,0 +1,4 @@
+# Copy this file to weather.local.sh for local-only values that should not be committed.
+WEATHER_LOCATION="City"
+WEATHER_REGION=""
+WEATHER_LANG="en"

@@ -1,0 +1,13 @@
+.DS_Store
+**/.DS_Store
+*.swp
+*.swo
+
+# Local-only overrides
+config/sketchybar/plugins/weather.local.sh
+
+# Built or vendored local binaries
+config/sketchybar/helper/helper
+config/sketchybar/helpers/menus/bin/menus
+config/sketchybar/helpers/event_providers/cpu_load/bin/cpu_load
+config/sketchybar/helpers/event_providers/network_load/bin/network_load
