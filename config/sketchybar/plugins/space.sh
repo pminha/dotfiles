@@ -1,12 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+source "$CONFIG_DIR/plugins/bin.sh"
+
+AEROSPACE_BIN="$(find_command aerospace)"
 
 update() {
   # Only handle space_change events, let space_windows.sh handle aerospace_workspace_change
   if [ "$SENDER" = "space_change" ]; then
+    [[ -z "$AEROSPACE_BIN" ]] && return 0
+
     source "$CONFIG_DIR/colors.sh"
     
     # Get current focused workspace
-    CURRENT_FOCUSED=$(aerospace list-workspaces --focused)
+    CURRENT_FOCUSED=$("$AEROSPACE_BIN" list-workspaces --focused 2>/dev/null)
+    [[ -z "$CURRENT_FOCUSED" ]] && return 0
     
     # Set the focused space to highlighted state
     sketchybar --set space.$CURRENT_FOCUSED icon.highlight=true \
@@ -33,7 +40,7 @@ mouse_clicked() {
         fi
       fi
     else
-      aerospace workspace ${NAME#*.}
+      [[ -n "$AEROSPACE_BIN" ]] && "$AEROSPACE_BIN" workspace "${NAME#*.}"
     fi
   fi
 }

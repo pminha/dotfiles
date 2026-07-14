@@ -5,6 +5,7 @@
 
 # Local-only overrides
 config/sketchybar/plugins/weather.local.sh
+config/sketchybar.backup-*
 
 # Built or vendored local binaries
 config/sketchybar/helper/helper
