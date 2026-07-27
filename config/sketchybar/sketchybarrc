@@ -94,6 +94,7 @@ source "$ITEM_DIR/volume.sh"
 
 source "$ITEM_DIR/cpu.sh"
 source "$ITEM_DIR/weather.sh"
+source "$ITEM_DIR/codex.sh"
 
 sketchybar --hotload on
 

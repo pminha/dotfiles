@@ -14,40 +14,6 @@ log_debug() {
   fi
 }
 
-get_ms_time() {
-  local time_bin
-
-  time_bin="$(find_command gdate)"
-  if [[ -n "$time_bin" ]]; then
-    echo $(( $("$time_bin" +%s%N) / 1000000 ))
-  else
-    echo $(( $(date +%s000000000) / 1000000 ))
-  fi
-}
-
-time_start() {
-  if [[ "$DEBUG" == true ]]; then
-    TIME_BEGIN="$(get_ms_time)"
-    log_debug "---------------------------------"
-  fi
-}
-
-time_checkpoint() {
-  if [[ "$DEBUG" == true ]]; then
-    local current_time
-    current_time="$(get_ms_time)"
-    log_debug "Checkpoint [$1]: $((current_time - TIME_BEGIN)) ms"
-  fi
-}
-
-time_end() {
-  if [[ "$DEBUG" == true ]]; then
-    local end_time
-    end_time="$(get_ms_time)"
-    log_debug "Elapsed time end: $((end_time - TIME_BEGIN)) ms"
-  fi
-}
-
 get_workspace_apps() {
   local workspace="$1"
 
@@ -65,17 +31,15 @@ get_workspace_apps() {
 build_icon_strip() {
   local apps="$1"
   local app
+  local icon_strip=""
 
-  ICON_STRIP=" "
-  if [[ -n "$apps" ]]; then
-    while IFS= read -r app; do
-      [[ -z "$app" ]] && continue
-      icon_map "$app"
-      ICON_STRIP+=" $icon_result"
-    done <<< "$apps"
-  else
-    ICON_STRIP=" —"
-  fi
+  while IFS= read -r app; do
+    [[ -z "$app" ]] && continue
+    icon_map "$app"
+    icon_strip+=" $icon_result"
+  done <<< "$apps"
+
+  printf '%s' "$icon_strip"
 }
 
 if [[ "$SENDER" != "aerospace_workspace_change" ]]; then
@@ -91,33 +55,19 @@ if [[ -z "$AEROSPACE_BIN" ]]; then
 fi
 
 current_workspace="${AEROSPACE_FOCUSED_WORKSPACE:-}"
-previous_workspace="${AEROSPACE_PREV_WORKSPACE:-}"
+if [[ -z "$current_workspace" ]]; then
+  current_workspace="$("$AEROSPACE_BIN" list-workspaces --focused 2>/dev/null)"
+fi
 
 if [[ -z "$current_workspace" ]]; then
   log_debug "missing focused workspace"
   exit 0
 fi
 
-time_start
-
-time_checkpoint "before aerospace query"
+previous_workspace="${AEROSPACE_PREV_WORKSPACE:-}"
 current_apps="$(get_workspace_apps "$current_workspace")"
-build_icon_strip "$current_apps"
-current_icon_strip="$ICON_STRIP"
+current_icon_strip="$(build_icon_strip "$current_apps")"
 
-previous_apps=""
-previous_icon_strip=" —"
-if [[ -n "$previous_workspace" && "$previous_workspace" != "$current_workspace" ]]; then
-  previous_apps="$(get_workspace_apps "$previous_workspace")"
-  build_icon_strip "$previous_apps"
-  previous_icon_strip="$ICON_STRIP"
-fi
-
-time_checkpoint "after aerospace query"
-
-# Do not update display placement here. Space items are assigned to displays
-# during startup in items/spaces.sh; changing display on focus events moves
-# workspaces between monitors and breaks multi-monitor bars.
 args=(
   --animate sin 5
   --set "space.$current_workspace"
@@ -128,6 +78,8 @@ args=(
 )
 
 if [[ -n "$previous_workspace" && "$previous_workspace" != "$current_workspace" ]]; then
+  previous_apps="$(get_workspace_apps "$previous_workspace")"
+  previous_icon_strip="$(build_icon_strip "$previous_apps")"
   args+=(
     --set "space.$previous_workspace"
     "label=$previous_icon_strip"
@@ -138,11 +90,7 @@ if [[ -n "$previous_workspace" && "$previous_workspace" != "$current_workspace" 
 fi
 
 sketchybar "${args[@]}"
-time_checkpoint "after sketchybar update"
 
 log_debug "current workspace: $current_workspace"
 log_debug "current apps: $current_apps"
 log_debug "previous workspace: $previous_workspace"
-log_debug "previous apps: $previous_apps"
-
-time_end
