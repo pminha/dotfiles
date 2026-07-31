@@ -79,19 +79,26 @@ REMAINING_PERCENT=$((100 - USED_PERCENT))
 
 SECONDS_UNTIL_RESET=$((RESET_AT - $(date +%s)))
 
-if (( SECONDS_UNTIL_RESET <= 0 )); then
-  DAYS=0
-  HOURS=0
-  MINUTES=0
-else
+if (( SECONDS_UNTIL_RESET > 86400 )); then
+  UPDATE_FREQ=300
   DAYS=$((SECONDS_UNTIL_RESET / 86400))
   HOURS=$(((SECONDS_UNTIL_RESET % 86400) / 3600))
+  COUNTDOWN="${DAYS}d $(printf '%02dh' "$HOURS")"
+else
+  UPDATE_FREQ=60
+  HOURS=$((SECONDS_UNTIL_RESET / 3600))
   MINUTES=$(((SECONDS_UNTIL_RESET % 3600) / 60))
+  if (( HOURS < 0 )); then
+    HOURS=0
+  fi
+  if (( MINUTES < 0 )); then
+    MINUTES=0
+  fi
+  COUNTDOWN="$(printf '%02dh %02dm' "$HOURS" "$MINUTES")"
 fi
 
-COUNTDOWN="${DAYS}d $(printf '%02dh %02dm' "$HOURS" "$MINUTES")"
-
 "$SKETCHYBAR_BIN" --set "${NAME:-codex}" \
+  update_freq="$UPDATE_FREQ" \
   icon="$CODEX_ICON" \
   icon.font="sketchybar-app-font:Regular:14.0" \
   icon.color="$ICON_COLOR" \
