@@ -49,4 +49,4 @@ if (( ${#WEATHER_DESCRIPTION} > 16 )); then
 fi
 
 sketchybar --set "$NAME" \
-  label="${TEMPERATURE}°C • $WEATHER_DESCRIPTION"
+  label="${TEMPERATURE}°C, $WEATHER_DESCRIPTION"

@@ -80,24 +80,20 @@ REMAINING_PERCENT=$((100 - USED_PERCENT))
 SECONDS_UNTIL_RESET=$((RESET_AT - $(date +%s)))
 
 if (( SECONDS_UNTIL_RESET <= 0 )); then
-  COUNTDOWN="now"
+  DAYS=0
+  HOURS=0
+  MINUTES=0
 else
   DAYS=$((SECONDS_UNTIL_RESET / 86400))
   HOURS=$(((SECONDS_UNTIL_RESET % 86400) / 3600))
   MINUTES=$(((SECONDS_UNTIL_RESET % 3600) / 60))
-
-  if (( DAYS > 0 )); then
-    COUNTDOWN="${DAYS}d $(printf '%02dh' "$HOURS")"
-  elif (( HOURS > 0 )); then
-    COUNTDOWN="${HOURS}h $(printf '%02dm' "$MINUTES")"
-  else
-    COUNTDOWN="${MINUTES}m"
-  fi
 fi
+
+COUNTDOWN="${DAYS}d $(printf '%02dh %02dm' "$HOURS" "$MINUTES")"
 
 "$SKETCHYBAR_BIN" --set "${NAME:-codex}" \
   icon="$CODEX_ICON" \
   icon.font="sketchybar-app-font:Regular:14.0" \
   icon.color="$ICON_COLOR" \
-  label="${REMAINING_PERCENT}% • ${COUNTDOWN}" \
+  label="${REMAINING_PERCENT}% (${COUNTDOWN})" \
   label.color="$LABEL_COLOR"
