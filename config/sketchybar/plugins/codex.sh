@@ -17,13 +17,48 @@ CODEX_BIN="$(find_command codex || true)"
 JQ_BIN="$(find_command jq || true)"
 PERL_BIN="$(find_command perl || true)"
 
+PRIMARY_POPUP_ITEM="codex.limit.primary"
+SECONDARY_POPUP_ITEM="codex.limit.secondary"
+USAGE_BAR_SEGMENTS=20
+
+format_usage_bar() {
+  local remaining_percent="$1"
+  local filled_segments=$(((remaining_percent * USAGE_BAR_SEGMENTS + 50) / 100))
+  local segment
+  local bar=""
+
+  for ((segment = 0; segment < USAGE_BAR_SEGMENTS; segment++)); do
+    if (( segment < filled_segments )); then
+      bar+="█"
+    else
+      bar+="░"
+    fi
+  done
+
+  printf '%s' "$bar"
+}
+
 set_unavailable() {
+  local empty_bar
+
   [[ -n "$SKETCHYBAR_BIN" ]] || return 0
+  empty_bar="$(format_usage_bar 0)"
+
   "$SKETCHYBAR_BIN" --set "${NAME:-codex}" \
     icon="$CODEX_ICON" \
     icon.font="sketchybar-app-font:Regular:14.0" \
     icon.color="$GREY" \
     label="—" \
+    label.color="$GREY" \
+    --set "$PRIMARY_POPUP_ITEM" \
+    icon="5h limit:" \
+    icon.color="$GREY" \
+    label="${empty_bar}  —" \
+    label.color="$GREY" \
+    --set "$SECONDARY_POPUP_ITEM" \
+    icon="7d limit:" \
+    icon.color="$GREY" \
+    label="${empty_bar}  —" \
     label.color="$GREY"
 }
 
@@ -110,21 +145,22 @@ if [[ -z "$RATE_LIMIT_RESULT" ]]; then
   exit 0
 fi
 
-PRIMARY_USAGE_AND_RESET="$(
+PRIMARY_USAGE_DATA="$(
   printf '%s\n' "$RATE_LIMIT_RESULT" |
     "$JQ_BIN" -er '
       (.rateLimitsByLimitId.codex.primary // .rateLimits.primary // empty)
       | select(.usedPercent != null and .resetsAt != null)
-      | "\(.usedPercent),\(.resetsAt)"
+      | [.usedPercent, .resetsAt, (.windowDurationMins // 300)]
+      | @tsv
     ' 2>/dev/null
 )"
 
-if [[ -z "$PRIMARY_USAGE_AND_RESET" ]]; then
+if [[ -z "$PRIMARY_USAGE_DATA" ]]; then
   set_unavailable
   exit 0
 fi
 
-IFS=',' read -r PRIMARY_USED_PERCENT PRIMARY_RESET_AT <<<"$PRIMARY_USAGE_AND_RESET"
+IFS=$'\t' read -r PRIMARY_USED_PERCENT PRIMARY_RESET_AT PRIMARY_WINDOW_DURATION_MINS <<<"$PRIMARY_USAGE_DATA"
 
 if [[ ! "$PRIMARY_USED_PERCENT" =~ ^[0-9]+$ ||
       ! "$PRIMARY_RESET_AT" =~ ^[0-9]+$ ||
@@ -133,12 +169,18 @@ if [[ ! "$PRIMARY_USED_PERCENT" =~ ^[0-9]+$ ||
   exit 0
 fi
 
-SECONDARY_USAGE_AND_RESET="$(
+if [[ ! "$PRIMARY_WINDOW_DURATION_MINS" =~ ^[0-9]+$ ||
+      "$PRIMARY_WINDOW_DURATION_MINS" -eq 0 ]]; then
+  PRIMARY_WINDOW_DURATION_MINS=300
+fi
+
+SECONDARY_USAGE_DATA="$(
   printf '%s\n' "$RATE_LIMIT_RESULT" |
     "$JQ_BIN" -er '
       (.rateLimitsByLimitId.codex.secondary // .rateLimits.secondary // empty)
       | select(.usedPercent != null and .resetsAt != null)
-      | "\(.usedPercent),\(.resetsAt)"
+      | [.usedPercent, .resetsAt, (.windowDurationMins // 10080)]
+      | @tsv
     ' 2>/dev/null
 )"
 
@@ -162,20 +204,85 @@ format_countdown() {
   fi
 }
 
+format_window_name() {
+  local duration_mins="$1"
+
+  if (( duration_mins % 1440 == 0 )); then
+    printf '%dd limit:' "$((duration_mins / 1440))"
+  elif (( duration_mins % 60 == 0 )); then
+    printf '%dh limit:' "$((duration_mins / 60))"
+  else
+    printf '%dm limit:' "$duration_mins"
+  fi
+}
+
+format_reset_time() {
+  local reset_at="$1"
+  local duration_mins="$2"
+  local formatted_reset
+
+  if (( duration_mins <= 1440 )); then
+    formatted_reset="$(LC_ALL=C TZ=Asia/Seoul date -r "$reset_at" '+%-I:%M %p' 2>/dev/null)"
+  else
+    formatted_reset="$(LC_ALL=C TZ=Asia/Seoul date -r "$reset_at" '+%b %-d' 2>/dev/null)"
+  fi
+
+  printf '%s' "${formatted_reset:-—}"
+}
+
+format_popup_usage() {
+  local remaining_percent="$1"
+  local reset_at="$2"
+  local duration_mins="$3"
+  local usage_bar reset_time
+
+  usage_bar="$(format_usage_bar "$remaining_percent")"
+  reset_time="$(format_reset_time "$reset_at" "$duration_mins")"
+  printf '%s  %d%% left (resets %s)' "$usage_bar" "$remaining_percent" "$reset_time"
+}
+
 NOW="$(date +%s)"
 PRIMARY_REMAINING_PERCENT=$((100 - PRIMARY_USED_PERCENT))
 PRIMARY_COUNTDOWN="$(format_countdown "$PRIMARY_RESET_AT")"
 LABEL="${PRIMARY_REMAINING_PERCENT}% (${PRIMARY_COUNTDOWN})"
+PRIMARY_WINDOW_NAME="$(format_window_name "$PRIMARY_WINDOW_DURATION_MINS")"
+PRIMARY_POPUP_LABEL="$(
+  format_popup_usage \
+    "$PRIMARY_REMAINING_PERCENT" \
+    "$PRIMARY_RESET_AT" \
+    "$PRIMARY_WINDOW_DURATION_MINS"
+)"
 
-if [[ -n "$SECONDARY_USAGE_AND_RESET" ]]; then
-  IFS=',' read -r SECONDARY_USED_PERCENT SECONDARY_RESET_AT <<<"$SECONDARY_USAGE_AND_RESET"
+EMPTY_USAGE_BAR="$(format_usage_bar 0)"
+SECONDARY_WINDOW_NAME="7d limit:"
+SECONDARY_POPUP_LABEL="${EMPTY_USAGE_BAR}  —"
+SECONDARY_POPUP_COLOR="$GREY"
+
+if [[ -n "$SECONDARY_USAGE_DATA" ]]; then
+  IFS=$'\t' read -r \
+    SECONDARY_USED_PERCENT \
+    SECONDARY_RESET_AT \
+    SECONDARY_WINDOW_DURATION_MINS <<<"$SECONDARY_USAGE_DATA"
 
   if [[ "$SECONDARY_USED_PERCENT" =~ ^[0-9]+$ &&
         "$SECONDARY_RESET_AT" =~ ^[0-9]+$ &&
         "$SECONDARY_USED_PERCENT" -le 100 ]]; then
+    if [[ ! "$SECONDARY_WINDOW_DURATION_MINS" =~ ^[0-9]+$ ||
+          "$SECONDARY_WINDOW_DURATION_MINS" -eq 0 ]]; then
+      SECONDARY_WINDOW_DURATION_MINS=10080
+    fi
+
     SECONDARY_REMAINING_PERCENT=$((100 - SECONDARY_USED_PERCENT))
     SECONDARY_COUNTDOWN="$(format_countdown "$SECONDARY_RESET_AT")"
     LABEL+=" / ${SECONDARY_REMAINING_PERCENT}% (${SECONDARY_COUNTDOWN})"
+    SECONDARY_WINDOW_NAME="$(format_window_name "$SECONDARY_WINDOW_DURATION_MINS")"
+    SECONDARY_POPUP_LABEL="$(
+      format_popup_usage \
+        "$SECONDARY_REMAINING_PERCENT" \
+        "$SECONDARY_RESET_AT" \
+        "$SECONDARY_WINDOW_DURATION_MINS"
+    )"
+    SECONDARY_POPUP_COLOR="$LABEL_COLOR"
   fi
 fi
 
@@ -192,4 +299,14 @@ fi
   icon.font="sketchybar-app-font:Regular:14.0" \
   icon.color="$ICON_COLOR" \
   label="$LABEL" \
-  label.color="$LABEL_COLOR"
+  label.color="$LABEL_COLOR" \
+  --set "$PRIMARY_POPUP_ITEM" \
+  icon="$PRIMARY_WINDOW_NAME" \
+  icon.color="$GREY" \
+  label="$PRIMARY_POPUP_LABEL" \
+  label.color="$LABEL_COLOR" \
+  --set "$SECONDARY_POPUP_ITEM" \
+  icon="$SECONDARY_WINDOW_NAME" \
+  icon.color="$GREY" \
+  label="$SECONDARY_POPUP_LABEL" \
+  label.color="$SECONDARY_POPUP_COLOR"

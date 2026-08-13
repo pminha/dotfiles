@@ -38,6 +38,6 @@ I have aerospace set to a maximum of 10 spaces: 1 ~ 10 (0) to be accessed easily
 ## sketchybar
 [project link](https://github.com/FelixKratz/SketchyBar)
 
-The SketchyBar configuration includes a Codex quota item. It displays the remaining Codex usage percentage and countdown until the quota resets. Clicking the item opens a popup with the predicted probability of a reset within the next 48 hours, retrieved from [willcodexquotareset.com](https://www.willcodexquotareset.com/).
+The SketchyBar configuration includes a Codex quota item. It displays the remaining Codex usage percentage and countdown until the quota resets. Clicking the item opens a compact popup with segmented short- and long-window usage bars, their reset times in Seoul, and the predicted probability of a reset within the next 48 hours from [willcodexquotareset.com](https://www.willcodexquotareset.com/).
 
 The quota display requires the Codex CLI, `jq`, `perl`, and `curl`. If usage data is unavailable, the item falls back to `—`.
