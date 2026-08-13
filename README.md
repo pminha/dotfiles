@@ -21,6 +21,13 @@ Current skills:
 - [`skills/grilling`](skills/grilling) for stress-testing plans, decisions, and ideas through a one-question-at-a-time interview
 - [`skills/grill-me`](skills/grill-me) as a manual `/grill-me` shortcut for starting a grilling session
 
+### pets/
+
+Custom Codex pets live under `pets/`. The directory is symlinked to `~/.codex/pets` so Codex can discover the repository-managed pet packages.
+
+Tracked pets:
+- `clippy`
+
 ## aerospace
 [project link](https://github.com/nikitabobko/AeroSpace)
 
