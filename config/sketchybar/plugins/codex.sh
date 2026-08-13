@@ -35,66 +35,155 @@ fi
 REQUESTS=$'{"id":1,"method":"initialize","params":{"clientInfo":{"name":"sketchybar-codex-usage","version":"1.0"}}}\n{"id":2,"method":"account/rateLimits/read"}'
 
 # Keep a slow or unavailable app-server from blocking SketchyBar updates.
-SERVER_OUTPUT="$(
-  {
-    printf '%s\n' "$REQUESTS"
-    sleep 2
-  } |
-    "$PERL_BIN" -e 'alarm 8; exec @ARGV' "$CODEX_BIN" app-server --listen stdio:// 2>/dev/null
-)"
+SERVER_TIMEOUT_SECONDS=15
+RUNTIME_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sketchybar-codex.XXXXXX" 2>/dev/null || true)"
 
-RATE_LIMIT_RESULT="$(
-  printf '%s\n' "$SERVER_OUTPUT" |
-    "$JQ_BIN" -cer 'select(.id == 2 and .result != null) | .result' 2>/dev/null |
-    tail -n 1
-)"
+if [[ -z "$RUNTIME_DIR" ]]; then
+  set_unavailable
+  exit 0
+fi
+
+REQUEST_PIPE="$RUNTIME_DIR/requests"
+RESPONSE_FILE="$RUNTIME_DIR/responses"
+SERVER_PID=""
+REQUEST_FD_OPEN=false
+
+cleanup_server() {
+  if [[ "$REQUEST_FD_OPEN" == true ]]; then
+    exec 3>&-
+    REQUEST_FD_OPEN=false
+  fi
+
+  if [[ -n "$SERVER_PID" ]]; then
+    kill "$SERVER_PID" 2>/dev/null || true
+    wait "$SERVER_PID" 2>/dev/null || true
+    SERVER_PID=""
+  fi
+
+  rm -f "$REQUEST_PIPE" "$RESPONSE_FILE"
+  rmdir "$RUNTIME_DIR" 2>/dev/null || true
+}
+
+if ! mkfifo "$REQUEST_PIPE" || ! : >"$RESPONSE_FILE"; then
+  cleanup_server
+  set_unavailable
+  exit 0
+fi
+
+trap cleanup_server EXIT
+
+"$PERL_BIN" -e 'alarm 17; exec @ARGV' \
+  "$CODEX_BIN" app-server --listen stdio:// \
+  <"$REQUEST_PIPE" >"$RESPONSE_FILE" 2>/dev/null &
+SERVER_PID=$!
+
+# Keep stdin open until the requested response arrives. Closing it after a fixed
+# delay can make app-server drop a valid response when a backend request is slow.
+exec 3>"$REQUEST_PIPE"
+REQUEST_FD_OPEN=true
+printf '%s\n' "$REQUESTS" >&3
+
+RATE_LIMIT_RESULT=""
+attempt=0
+max_attempts=$((SERVER_TIMEOUT_SECONDS * 5))
+
+while (( attempt < max_attempts )); do
+  RATE_LIMIT_RESULT="$(
+    "$JQ_BIN" -cer 'select(.id == 2 and .result != null) | .result' \
+      "$RESPONSE_FILE" 2>/dev/null |
+      tail -n 1
+  )"
+
+  if [[ -n "$RATE_LIMIT_RESULT" ]] || ! kill -0 "$SERVER_PID" 2>/dev/null; then
+    break
+  fi
+
+  sleep 0.2
+  attempt=$((attempt + 1))
+done
+
+cleanup_server
+trap - EXIT
 
 if [[ -z "$RATE_LIMIT_RESULT" ]]; then
   set_unavailable
   exit 0
 fi
 
-USAGE_AND_RESET="$(
+PRIMARY_USAGE_AND_RESET="$(
   printf '%s\n' "$RATE_LIMIT_RESULT" |
     "$JQ_BIN" -er '
       (.rateLimitsByLimitId.codex.primary // .rateLimits.primary // empty)
       | select(.usedPercent != null and .resetsAt != null)
-      | "\(.usedPercent)\t\(.resetsAt)"
+      | "\(.usedPercent),\(.resetsAt)"
     ' 2>/dev/null
 )"
 
-if [[ -z "$USAGE_AND_RESET" ]]; then
+if [[ -z "$PRIMARY_USAGE_AND_RESET" ]]; then
   set_unavailable
   exit 0
 fi
 
-IFS=$'\t' read -r USED_PERCENT RESET_AT <<<"$USAGE_AND_RESET"
+IFS=',' read -r PRIMARY_USED_PERCENT PRIMARY_RESET_AT <<<"$PRIMARY_USAGE_AND_RESET"
 
-if [[ ! "$USED_PERCENT" =~ ^[0-9]+$ || ! "$RESET_AT" =~ ^[0-9]+$ ]]; then
+if [[ ! "$PRIMARY_USED_PERCENT" =~ ^[0-9]+$ ||
+      ! "$PRIMARY_RESET_AT" =~ ^[0-9]+$ ||
+      "$PRIMARY_USED_PERCENT" -gt 100 ]]; then
   set_unavailable
   exit 0
 fi
 
-REMAINING_PERCENT=$((100 - USED_PERCENT))
+SECONDARY_USAGE_AND_RESET="$(
+  printf '%s\n' "$RATE_LIMIT_RESULT" |
+    "$JQ_BIN" -er '
+      (.rateLimitsByLimitId.codex.secondary // .rateLimits.secondary // empty)
+      | select(.usedPercent != null and .resetsAt != null)
+      | "\(.usedPercent),\(.resetsAt)"
+    ' 2>/dev/null
+)"
 
-SECONDS_UNTIL_RESET=$((RESET_AT - $(date +%s)))
+format_countdown() {
+  local reset_at="$1"
+  local seconds_until_reset=$((reset_at - NOW))
+  local days hours minutes
 
-if (( SECONDS_UNTIL_RESET > 86400 )); then
+  if (( seconds_until_reset < 0 )); then
+    seconds_until_reset=0
+  fi
+
+  if (( seconds_until_reset > 86400 )); then
+    days=$((seconds_until_reset / 86400))
+    hours=$(((seconds_until_reset % 86400) / 3600))
+    printf '%dd %02dh' "$days" "$hours"
+  else
+    hours=$((seconds_until_reset / 3600))
+    minutes=$(((seconds_until_reset % 3600) / 60))
+    printf '%02dh %02dm' "$hours" "$minutes"
+  fi
+}
+
+NOW="$(date +%s)"
+PRIMARY_REMAINING_PERCENT=$((100 - PRIMARY_USED_PERCENT))
+PRIMARY_COUNTDOWN="$(format_countdown "$PRIMARY_RESET_AT")"
+LABEL="${PRIMARY_REMAINING_PERCENT}% (${PRIMARY_COUNTDOWN})"
+
+if [[ -n "$SECONDARY_USAGE_AND_RESET" ]]; then
+  IFS=',' read -r SECONDARY_USED_PERCENT SECONDARY_RESET_AT <<<"$SECONDARY_USAGE_AND_RESET"
+
+  if [[ "$SECONDARY_USED_PERCENT" =~ ^[0-9]+$ &&
+        "$SECONDARY_RESET_AT" =~ ^[0-9]+$ &&
+        "$SECONDARY_USED_PERCENT" -le 100 ]]; then
+    SECONDARY_REMAINING_PERCENT=$((100 - SECONDARY_USED_PERCENT))
+    SECONDARY_COUNTDOWN="$(format_countdown "$SECONDARY_RESET_AT")"
+    LABEL+=" / ${SECONDARY_REMAINING_PERCENT}% (${SECONDARY_COUNTDOWN})"
+  fi
+fi
+
+SECONDS_UNTIL_PRIMARY_RESET=$((PRIMARY_RESET_AT - NOW))
+if (( SECONDS_UNTIL_PRIMARY_RESET > 86400 )); then
   UPDATE_FREQ=300
-  DAYS=$((SECONDS_UNTIL_RESET / 86400))
-  HOURS=$(((SECONDS_UNTIL_RESET % 86400) / 3600))
-  COUNTDOWN="${DAYS}d $(printf '%02dh' "$HOURS")"
 else
   UPDATE_FREQ=60
-  HOURS=$((SECONDS_UNTIL_RESET / 3600))
-  MINUTES=$(((SECONDS_UNTIL_RESET % 3600) / 60))
-  if (( HOURS < 0 )); then
-    HOURS=0
-  fi
-  if (( MINUTES < 0 )); then
-    MINUTES=0
-  fi
-  COUNTDOWN="$(printf '%02dh %02dm' "$HOURS" "$MINUTES")"
 fi
 
 "$SKETCHYBAR_BIN" --set "${NAME:-codex}" \
@@ -102,5 +191,5 @@ fi
   icon="$CODEX_ICON" \
   icon.font="sketchybar-app-font:Regular:14.0" \
   icon.color="$ICON_COLOR" \
-  label="${REMAINING_PERCENT}% (${COUNTDOWN})" \
+  label="$LABEL" \
   label.color="$LABEL_COLOR"
